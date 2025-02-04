@@ -16,7 +16,7 @@ bot = GreenAPIBot(
 
 def create_db():
     """
-    Функция для создания соединения с базой данных и таблицы напоминаний.
+    Функция для создания соединения с базой данных и создания таблицы напоминаний.
     """
     try:
         config = configparser.ConfigParser()
@@ -167,6 +167,62 @@ def create(notification: Notification) -> None:
     c.execute(insert_query, (time_notice, text_notice, sender, next_num, type_regular))
     conn.commit()
     notification.answer(f'Ваше напоминание с номером {next_num} было успешно сохранено')
+
+
+@bot.router.message(command="info")
+def get_info(notification: Notification) -> None:
+    """
+    Возвращает подробную информацию о выбранном напоминании либо о последнем добавленном.
+
+    Параметры:
+    - [num_reminder] - номер напоминания
+
+    Пример команды:
+    /info 1
+    """
+
+    message_data = notification.get_message_data()
+    sender = notification.get_sender()[:-5]
+    message_text = message_data['textMessageData']['textMessage']
+    parts = message_text.split()
+
+    if len(parts) < 2:
+        c = conn.cursor()
+        c.execute(
+            'select Max(num_reminder) FROM reminders WHERE sender = %s', (sender,)
+        )
+        rows = c.fetchone()
+        if rows and rows[0] is not None:
+            c.execute("SELECT * FROM reminders WHERE sender = %s and num_reminder = %s", (sender, rows[0]))
+            result = c.fetchome()
+            answer = 'Детали напоминания:\n'
+            notice = result[0]
+            time_notice = f'Время напоминания: {notice[0]}\n'
+            text_notice = f'Текст напоминания: {notice[1]}\n'
+            regular_notice = f'Регулярность напоминания: {notice[4]}\n'
+            category_notice = f'Категория напоминания: {notice[5]}\n'
+            status_notice = f'Статус напоминания: {notice[6]}\n'
+            answer = answer + time_notice + text_notice + regular_notice + category_notice + status_notice
+
+        else:
+            answer = 'У вас пока нет сохраненных напоминаний'
+    else:
+        num_reminder = parts[1]
+        c = conn.cursor()
+        c.execute("SELECT * FROM reminders WHERE sender = %s and num_reminder = %s", (sender, num_reminder))
+        rows = c.fetchall()
+        if rows:
+            answer = 'Детали напоминания:\n'
+            notice = rows[0]
+            time_notice = f'Время напоминания: {notice[0]}\n'
+            text_notice = f'Текст напоминания: {notice[1]}\n'
+            regular_notice = f'Регулярность напоминания: {notice[4]}\n'
+            category_notice = f'Категория напоминания: {notice[5]}\n'
+            status_notice = f'Статус напоминания: {notice[6]}\n'
+            answer = answer + time_notice + text_notice + regular_notice + category_notice + status_notice
+        else:
+            answer = 'У вас пока нет сохраненных напоминаний'
+    notification.answer(answer)
 
 
 @bot.router.message(command="edit")
